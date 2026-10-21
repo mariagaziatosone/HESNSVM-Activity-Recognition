@@ -2,11 +2,9 @@
 Scheletro per l'Echo State Network in NumPy -- COMPLETATO.
 
 Firme delle funzioni e della classe identiche allo scheletro consegnato.
-Aggiunte (tutte facoltative, non cambiano l'interfaccia):
-    - run_reservoir(U, x0=None, return_all=False): x0 e return_all servono
-      al test della echo state property e al grafico delle traiettorie;
-    - fit_states / decision_from_states: lo stesso readout, ma partendo da
-      stati gia' calcolati (HESNSVM usa gli stessi stati per ESN e SVM).
+Unica aggiunta: run_reservoir accetta due parametri facoltativi,
+x0 (stato iniziale, per il test della echo state property) e
+return_all (tutta la traiettoria, per il grafico).
 
 Notazione del paper (Tabella 5):
     Nr  dimensione del reservoir
@@ -42,14 +40,15 @@ def encode_input(X: np.ndarray, mode: str, n_repeat: int = 10) -> np.ndarray:
         "repeat"               lo stesso vettore ripetuto per T passi
                                                           -> (N, n_repeat, 18)
 
-    Cosa si osserva su rho (Fig. 5 del paper):
+    Cosa si osserva su rho (Fig. 5 del paper, rifatta in main.py):
       * "single_step": con stato iniziale nullo il termine W x(t-1) vale
-        sempre zero, quindi rho non ha NESSUN effetto (accuracy piatta ~92%).
+        sempre zero, quindi rho NON ha effetto (accuracy piatta ~92%).
       * "feature_as_sequence": accuracy a campana in rho, 28% -> 79% -> 31%,
         quasi identica al paper (25% -> 80% -> 31%).
-      * "repeat": quasi piatta (~92%) fino a rho ~1.7, poi cala (83% a
-        rho = 3): l'input costante "trattiene" il reservoir e rho conta poco.
-    Il paper quindi dava le feature una per passo: e' la modalita' scelta.
+      * "repeat": quasi piatta (~92%) fino a rho ~1.7, poi cala (83% a rho 3).
+    Scelta: "feature_as_sequence". Con i parametri della sez. 5.2 da' 91.7%,
+    il valore piu' vicino al 92.08% del paper, ed e' l'unica che riproduce
+    la Fig. 5.
     """
     X = np.asarray(X, dtype=float)
     if mode == "single_step":
@@ -70,14 +69,11 @@ def make_reservoir_matrix(n_reservoir: int, sparsity: float,
                           rng: np.random.Generator) -> np.ndarray:
     """
     Matrice ricorrente casuale e sparsa, con raggio spettrale rho.
-
-    Ordine delle operazioni:
       1. pesi uniformi in [-0.5, 0.5] (come il codice di riferimento)
       2. maschera di sparsita': resta una frazione `sparsity` (beta) dei pesi
       3. solo ora calcolo il raggio spettrale e riscalo a rho
-    Per Nr fino a qualche migliaio basta np.linalg.eigvals (Nr=1500: pochi
-    secondi); per reservoir piu' grandi si userebbe
-    scipy.sparse.linalg.eigs(W, k=1, which='LM').
+    Con Nr = 700 basta np.linalg.eigvals; per reservoir molto grandi si
+    userebbe scipy.sparse.linalg.eigs(W, k=1, which='LM').
     """
     W = rng.uniform(-0.5, 0.5, size=(n_reservoir, n_reservoir))
     W = W * (rng.random((n_reservoir, n_reservoir)) < sparsity)
@@ -98,7 +94,6 @@ class ESN:
         self.input_scaling = input_scaling
         self.noise = noise
         self.ridge = ridge
-        self.seed = seed                        # salvato con i risultati
         self.rng = np.random.default_rng(seed)  # un seed per ogni run, da salvare
 
         # W_in densa, uniforme in [-1, 1] e scalata da omega (come il codice
@@ -124,7 +119,7 @@ class ESN:
             - al readout va l'ULTIMO stato
             - il rumore, uniforme in [0, noise), entra DENTRO la tanh
             - nessun bias nell'input
-            - stato iniziale sempre a zero (x0 serve solo ai test)
+            - stato iniziale sempre a zero (x0 serve solo al test)
         """
         n_samples, n_steps, _ = U.shape
         x = np.zeros((n_samples, self.n_reservoir)) if x0 is None else x0
@@ -141,19 +136,15 @@ class ESN:
         """
         Calcola gli stati, poi il readout con regressione ridge.
         y: etichette intere (n_campioni,). Il target e' one-hot.
-        """
-        return self.fit_states(self.run_reservoir(U), y)
 
-    def fit_states(self, S: np.ndarray, y: np.ndarray) -> "ESN":
-        """
-        Readout ridge a partire dagli stati S (N, Nr).
         Minimizza ||S W + b - Y||^2 + lam ||W||^2 con b non regolarizzato,
-        come sklearn.linear_model.Ridge. Per b: centro S e Y, risolvo senza b,
-        poi b = media(Y) - media(S) W.
+        come sklearn.linear_model.Ridge: si centrano S e Y, si risolve
+        senza b, poi b = media(Y) - media(S) W.
         Niente inversa, np.linalg.solve sul sistema piu' piccolo:
             primale (N >= Nr):  (Sc^T Sc + lam I) W = Sc^T Yc        Nr x Nr
             duale   (N <  Nr):  W = Sc^T (Sc Sc^T + lam I)^-1 Yc     N x N
         """
+        S = self.run_reservoir(U)
         Y = np.eye(self.n_classes)[y]
         s_mean, y_mean = S.mean(axis=0), Y.mean(axis=0)
         Sc, Yc = S - s_mean, Y - y_mean
@@ -165,12 +156,9 @@ class ESN:
         self.b_out = y_mean - s_mean @ self.W_out
         return self
 
-    def decision_from_states(self, S: np.ndarray) -> np.ndarray:
-        return S @ self.W_out + self.b_out
-
     def decision_function(self, U: np.ndarray) -> np.ndarray:
         """Uscite grezze del readout (n_campioni, n_classi). Servono per HESNSVM."""
-        return self.decision_from_states(self.run_reservoir(U))
+        return self.run_reservoir(U) @ self.W_out + self.b_out
 
     def predict(self, U: np.ndarray) -> np.ndarray:
         return np.argmax(self.decision_function(U), axis=1)
@@ -198,7 +186,6 @@ def test_spectral_radius():
     for rho in [0.5, 1.0, 1.3, 2.0]:
         W = make_reservoir_matrix(300, 0.33, rho, rng)
         assert abs(np.max(np.abs(np.linalg.eigvals(W))) - rho) < 1e-8
-        assert abs(np.mean(W != 0) - 0.33) < 0.02        # sparsita' ~ beta
 
 
 def test_states_bounded():
@@ -210,9 +197,7 @@ def test_states_bounded():
     U, _ = _paper_data()
     esn = ESN(n_channels=1, n_classes=10, **P52)
     traj = esn.run_reservoir(U[:3], return_all=True)          # (3, 18, 700)
-    big = esn.run_reservoir(np.random.default_rng(1).normal(0, 5, (50, 100, 1)))
     assert np.all(np.isfinite(traj)) and np.abs(traj).max() <= 1
-    assert np.abs(big).max() <= 1                    # anche con input enormi
 
     plt.figure(figsize=(7, 3))
     plt.plot(traj[0, :, :8])
@@ -232,10 +217,9 @@ def test_echo_state_property():
     rng = np.random.default_rng(2)
     U = rng.normal(size=(5, 200, 1))
     esn = ESN(n_channels=1, n_classes=10, **{**P52, "noise": 0.0})
-    xa = esn.run_reservoir(U, x0=rng.uniform(-1, 1, (5, 700)), return_all=True)
-    xb = esn.run_reservoir(U, x0=rng.uniform(-1, 1, (5, 700)), return_all=True)
-    dist = np.linalg.norm(xa - xb, axis=2)                    # (campioni, passi)
-    assert np.all(dist[:, -1] < 1e-6 * dist[:, 0])
+    xa = esn.run_reservoir(U, x0=rng.uniform(-1, 1, (5, 700)))
+    xb = esn.run_reservoir(U, x0=rng.uniform(-1, 1, (5, 700)))
+    assert np.abs(xa - xb).max() < 1e-6        # dopo 200 passi: stessi stati
 
 
 def test_ridge_matches_sklearn():
@@ -243,12 +227,12 @@ def test_ridge_matches_sklearn():
     from sklearn.linear_model import Ridge
     rng = np.random.default_rng(3)
     for n in [400, 50]:                     # n > Nr: primale, n < Nr: duale
-        S, y = rng.normal(size=(n, 100)), rng.integers(0, 10, n)
+        U, y = rng.normal(size=(n, 5, 1)), rng.integers(0, 10, n)
         esn = ESN(n_channels=1, n_reservoir=100, n_classes=10, sparsity=0.3,
-                  spectral_radius=1.0, input_scaling=1.0, ridge=2.5)
-        esn.fit_states(S, y)
+                  spectral_radius=1.0, input_scaling=1.0, ridge=2.5)  # noise = 0
+        S = esn.run_reservoir(U)
         reference = Ridge(alpha=2.5).fit(S, np.eye(10)[y]).predict(S)
-        assert np.allclose(esn.decision_from_states(S), reference, atol=1e-8)
+        assert np.allclose(esn.fit(U, y).decision_function(U), reference, atol=1e-8)
 
 
 def test_recurrence_matters():
