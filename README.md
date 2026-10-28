@@ -80,13 +80,13 @@ Collegamenti tra i file: `main.py` usa `modules.py`, che usa `esn.py`; i dati ar
 | `train_ESN(...)` | addestra una ESN sul training e restituisce accuratezza e F1 pesata sul test |
 
 ### `main.py` — gli esperimenti
-| Funzione | Punto della consegna | Cosa fa |
-|---|---|---|
-| `dataset_check()` | 2 | campioni, feature, classi, valori mancanti, campioni per classe e per partecipante, numero di feature dopo ogni passo |
-| `svm_iris()` | 3 | SVC su iris al variare di C e gamma, con e senza scaler; verifica della strategia multiclasse |
-| `svm_paper()` | 2, 3 | SVM del paper con la 10-fold stratificata e con i partecipanti separati, ciascuna con preprocessing globale e dentro il fold |
-| `esn_sec52()` | 4 | ESN con i parametri della sez. 5.2, split 70/30, 3 seed, per ogni codifica dell'input |
-| `esn_fig5()` | 4 | accuratezza al variare di ρ per ogni codifica, confrontata con la Fig. 5 del paper; salva `imgs/esn_fig5.png` |
+| Funzione | Cosa fa |
+|---|---|
+| `dataset_check()` | campioni, feature, classi, valori mancanti, campioni per classe e per partecipante, numero di feature dopo ogni passo |
+| `svm_iris()` | SVC su iris al variare di C e gamma, con e senza scaler; verifica della strategia multiclasse |
+| `svm_paper()` | SVM del paper con la 10-fold stratificata e con i partecipanti separati, ciascuna con preprocessing globale e dentro il fold |
+| `esn_sec52()` | ESN con i parametri della sez. 5.2, split 70/30, 3 seed, per ogni codifica dell'input |
+| `esn_fig5()` | accuratezza al variare di ρ per ogni codifica, confrontata con la Fig. 5 del paper; salva `imgs/esn_fig5.png` |
 
 ### Esecuzione
 ```powershell
