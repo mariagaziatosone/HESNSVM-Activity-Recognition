@@ -133,11 +133,50 @@ Il dataset corrisponde al paper: **1150 campioni, 10 classi, 105 feature, nessun
 
 Le verifiche richieste sono superate: il raggio spettrale misurato è uguale a quello impostato (1,300000), gli stati restano in [-1, 1], e la echo state property vale anche con ρ = 1,3.
 
+### Effetto dei parametri della ESN (valori della Tabella 6 del paper)
+
+Per vedere quanto ogni parametro influisce sull'algoritmo, si parte dai valori **standard** della sez. 5.2 e se ne cambia **uno alla volta**, scegliendo i valori di test dentro gli intervalli della Tabella 6. Per ripetere una prova basta cambiare un solo valore nel dizionario `ESN_SEC52` di `main.py` e rieseguire.
+
+**Parametri provati** (validi per ESN, ESNSVM e HESNSVM)
+
+| Parametro | Nome nel codice | Standard (sez. 5.2) | Ottimo Tab. 6 | Intervallo Tab. 6 | Test 1 | Test 2 | Test 3 | Test 4 | Cosa aspettarsi |
+|---|---|---|---|---|---|---|---|---|---|
+| **Nr** — neuroni del reservoir | `n_reservoir` | 700 | 1500 | 750 – 2000 (solo 750, 1000, 1250, 1500, 1750, 2000) | 750 | 1000 | 1500 | 2000 | più neuroni danno di solito più accuratezza, ma il tempo cresce molto: è l'unico parametro che pesa sul tempo (Fig. 3–4) |
+| **β** — connessioni non nulle | `sparsity` | 0,33 | 0,2758 | 0,1 – 0,6 | 0,1 | 0,2758 | 0,45 | 0,6 | effetto piccolo secondo il paper |
+| **ρ** — raggio spettrale | `spectral_radius` | 1,3 | 1,3130 | 0,5 – 1,8 | 0,5 | 1,0 | 1,313 | 1,8 | effetto forte: valori troppo bassi o troppo alti fanno crollare l'accuratezza (Fig. 5) |
+| **ω** — scala dell'input | `input_scaling` | 1,7 ⚠ | 0,4319 | 0,01 – 1,0 | 0,01 | 0,1 | 0,4319 | 1,0 | effetto forte (Fig. 6); con valori molto piccoli l'input quasi non entra nella rete |
+| **£** — rumore | `noise` | 0,00001 | 0,0217 | 0 – 0,1 | 0 | 0,01 | 0,0217 | 0,1 | poco rumore aiuta contro l'overfitting, troppo rumore copre il segnale (Fig. 7) |
+| **λ** — regolarizzazione ridge | `ridge` | 15,12 | 8,6215 | 0,03 – 32 | 0,03 | 1 | 8,6215 | 32 | λ piccolo rischia l'overfitting, λ grande rende il modello troppo semplice (Fig. 8) |
+
+⚠ Il valore standard di ω (1,7) è fuori dall'intervallo della Tabella 6: la sez. 5.2 (split 70/30) e la Tabella 6 (10-fold) hanno cercato i parametri in zone diverse.
+
+**Risultati: accuratezza (%)** — ESN con `feature_as_sequence`, split 70/30, media di 3 seed; gli altri parametri restano allo standard
+
+| Parametro | Standard | Test 1 | Test 2 | Test 3 | Test 4 |
+|---|---|---|---|---|---|
+| Nr | 91,69 (700) | 92,27 (750) | 93,04 (1000) | 93,14 (1500) | **94,30** (2000) |
+| β | 91,69 (0,33) | 92,56 (0,1) | 92,66 (0,2758) | **92,85** (0,45) | 91,98 (0,6) |
+| ρ | 91,69 (1,3) | 75,94 (0,5) | 88,50 (1,0) | 92,08 (1,313) | **93,72** (1,8) |
+| ω | 91,69 (1,7) | 88,50 (0,01) | 92,85 (0,1) | **94,01** (0,4319) | 93,62 (1,0) |
+| £ | 91,69 (0,00001) | 91,69 (0) | 91,69 (0,01) | 91,69 (0,0217) | **91,79** (0,1) |
+| λ | 91,69 (15,12) | 92,37 (0,03) | **93,72** (1) | 92,56 (8,6215) | 91,01 (32) |
+| **Tutti i valori ottimi della Tab. 6 insieme** | | | | | **94,01** (F1 93,93) |
+
+**Tempo medio di una run al variare di Nr:** 0,87 s (700), 1,04 s (750), 1,73 s (1000), 3,39 s (1500), 6,28 s (2000).
+
+**Cosa si osserva**
+- **ρ è il parametro più importante**: con ρ = 0,5 l'accuratezza scende al 75,9%, cioè 16 punti in meno. Con un raggio spettrale basso la rete "dimentica" troppo in fretta le prime feature della sequenza. In questa prova il valore migliore è 1,8, più alto del picco della Fig. 5 (circa 1,3): la Fig. 5 usa altri parametri (ω = 0,47, rumore = 0,7), quindi il valore migliore di ρ dipende anche dagli altri parametri.
+- **ω conta molto**: con ω = 0,01 l'input quasi non entra nella rete (88,5%). I valori della Tabella 6 (0,43–1,0) funzionano meglio dello standard 1,7, che satura la tanh.
+- **Nr migliora l'accuratezza in modo regolare** (da 91,7% a 94,3%), ma il tempo cresce circa 7 volte da 700 a 2000 neuroni, come nella Fig. 4 del paper.
+- **λ**: i valori intermedi (circa 1) danno il risultato migliore; con 32 il modello diventa troppo semplice.
+- **β e £ hanno effetti piccoli**, coerenti con il paper. Il rumore fino a 0,1 non cambia quasi nulla.
+- **La combinazione completa della Tabella 6** dà 94,01%, più dello standard della sez. 5.2 (91,69%), al prezzo di un tempo circa 4 volte maggiore (1500 neuroni).
+- Le differenze sotto circa 1 punto vanno lette con cautela: tra un seed e l'altro l'accuratezza varia già di circa ±1 punto. Cambiare β, inoltre, cambia anche la matrice casuale del reservoir.
+
 ### BDESN
 Il codice di riferimento gira in un ambiente conda separato (Python 3.7, TensorFlow 1.14.0, numpy 1.16.4, scikit-learn 0.21.3). Per farlo funzionare è stato necessario fissare `gast==0.2.2` e `protobuf==3.20.3`. Prova sul dataset JAP incluso nel repository, con 500 epoche e 2 run:
 
 | ESN | GRU | BDESN |
-
 |---|---|---|
 | 75,4% | 84,2% | 90,7% |
 
@@ -151,14 +190,3 @@ Il codice di riferimento gira in un ambiente conda separato (Python 3.7, TensorF
    - rumore uniforme dentro la tanh;
    - nessun bias, stato iniziale nullo, al readout va l'ultimo stato;
    - intercetta del ridge non regolarizzata.
-
-### Punti poco chiari del paper
-1. La regola per passare da 105 a 35 feature non è spiegata, e il dataset pubblicato contiene colonne duplicate.
-2. La "10-fold cross validation" non è mescolata: con il file ordinato equivale a lasciare fuori un partecipante per fold.
-3. Il paper parla di SVM one-versus-rest, ma `SVC` di scikit-learn addestra 45 classificatori **one-vs-one**.
-4. Non viene detto come le 18 feature entrano nel reservoir; lo si deduce solo dalla Fig. 5.
-5. Il rumore usato per la Fig. 5 è 0,7 nel paper e 0,07 nel codice di riferimento.
-
-### Limiti
-- Jupyter non è installabile con Python 3.15: la sua dipendenza `pyyaml` non ha ancora un pacchetto precompilato per questa versione.
-- BDESN è stato provato solo sul dataset di esempio del repository, non sul nostro dataset.
