@@ -105,6 +105,16 @@ BDESN è eseguito a parte, in un ambiente conda con Python 3.7 e TensorFlow 1.14
 
 ## 3. Conclusioni e risultati ottenuti
 
+### Riepilogo: risultati ottenuti a confronto con il paper
+
+| Modello | Validazione | Nostro (acc / F1) | Paper (acc / F1) |
+|---|---|---|---|
+| SVM | partecipanti separati (10-fold) | 90,87 / 89,58 | 90,9 / 89,6 |
+| SVM | 10-fold stratificata, seed 0 | 92,96 / 92,82 | — |
+| ESN | sez. 5.2, split 70/30, 3 seed | 91,69 / 91,53 | 92,08 / 91,90 |
+
+*Il confronto mostra che la riproduzione è fedele al paper. La SVM, valutata con i partecipanti separati, ottiene gli stessi valori del paper fino al primo decimale, e anche i singoli fold coincidono con la Tabella 7. Questo conferma che pipeline di preprocessing, parametri e schema di validazione sono quelli usati dagli autori. La ESN, implementata da zero in NumPy, si discosta dal paper di soli 0,4 punti, uno scarto inferiore alla variabilità osservata tra un seed e l'altro (circa ±1 punto). Un ulteriore punto di forza è che la valutazione con i partecipanti separati misura la capacità del modello di riconoscere le attività di persone mai viste in addestramento, cioè lo scenario reale d'uso. La 10-fold stratificata, che mescola i campioni della stessa persona tra training e test, dà invece una stima più ottimistica di circa 2 punti.*
+
 ### Dataset
 Il dataset corrisponde al paper: **1150 campioni, 10 classi, 105 feature, nessun valore mancante**. Le classi hanno 100 campioni ciascuna, tranne corsa, seduta e camminata che ne hanno 150. L'identificativo del partecipante è presente (10 persone, 115 campioni ciascuna), e il file è ordinato per partecipante.
 
